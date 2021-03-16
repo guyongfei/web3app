@@ -1,0 +1,1 @@
+C:\tools\solc\solc-windows_v0.7.6.exe  -o c:\tools\solc --bin --abi --gas --optimize HelloWorld.sol

@@ -1,0 +1,1 @@
+web3j generate solidity -b HelloWorld.bin -a HelloWorld.abi -o .\java\ -p com.your.organisation.name
