@@ -1,1 +1,1 @@
-C:\tools\solc\solc-windows_v0.7.6.exe  -o c:\tools\solc --bin --abi --gas --optimize HelloWorld.sol
+D:\code\solidity\Web3App\tools\solc-windows_v0.8.2.exe  -o D:\code\solidity\Web3App\build\resources\main\solidity\ --bin --abi --gas --optimize OZERC721.sol

@@ -1,1 +1,1 @@
-web3j generate solidity -b HelloWorld.bin -a HelloWorld.abi -o .\java\ -p com.your.organisation.name
+web3j generate solidity -b D:\code\solidity\Web3App\build\resources\main\solidity\OZERC721.bin -a D:\code\solidity\Web3App\build\resources\main\solidity\OZERC721.abi -o D:\code\solidity\Web3App\build\generated\sources\web3j\main\java -p org.web3j.generated.contracts
