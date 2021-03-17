@@ -561,7 +561,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      * @dev See {IERC721-ownerOf}.
      */
     function ownerOf(uint256 tokenId) public view virtual override returns (address) {
-        address owner = _owners[tokenId];
+        address owner = _owners[tokenId]; // for none-exists tokenId, return address(0)
         require(owner != address(0), "ERC721: owner query for nonexistent token");
         return owner;
     }
