@@ -1009,6 +1009,257 @@ contract ERC721Enumerable is ERC165, ERC721, IERC721Enumerable{
     }
 }
 
-//contract OZERC721 is ERC721 {
-//    constructor() public ERC721("ArtChain", "AC") {}
-//}
+contract Ownable {
+    address private _owner;
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    /**
+     * @dev The Ownable constructor sets the original `owner` of the contract to the sender
+     * account.
+     */
+    constructor()  {
+        _owner = msg.sender;
+        emit OwnershipTransferred(address(0), _owner);
+    }
+
+    /**
+     * @return the address of the owner.
+     */
+    function owner() public view returns(address) {
+        return _owner;
+    }
+
+    /**
+     * @dev Throws if called by any account other than the owner.
+     */
+    modifier onlyOwner() {
+        require(isOwner(),"Ownable: must be runned by contract owner");
+        _;
+    }
+
+    /**
+     * @return true if `msg.sender` is the owner of the contract.
+     */
+    function isOwner() public view returns(bool) {
+        return msg.sender == _owner;
+    }
+
+    //    /**
+    //     * @dev Allows the current owner to relinquish control of the contract.
+    //     * @notice Renouncing to ownership will leave the contract without an owner.
+    //     * It will not be possible to call the functions with the `onlyOwner`
+    //     * modifier anymore.
+    //     */
+    //    function renounceOwnership() public onlyOwner {
+    //        emit OwnershipTransferred(_owner, address(0));
+    //        _owner = address(0);
+    //    }
+
+    /**
+     * @dev Allows the current owner to transfer control of the contract to a newOwner.
+     * @param newOwner The address to transfer ownership to.
+     */
+    function transferOwnership(address newOwner) public onlyOwner {
+        _transferOwnership(newOwner);
+    }
+
+    /**
+     * @dev Transfers control of the contract to a newOwner.
+     * @param newOwner The address to transfer ownership to.
+     */
+    function _transferOwnership(address newOwner) internal {
+        require(newOwner != address(0), "Ownable: newOwner cannot be address(0)");
+        emit OwnershipTransferred(_owner, newOwner);
+        _owner = newOwner;
+    }
+}
+
+contract Whitelist is Ownable {
+    // Mapping of address to boolean indicating whether the address is whitelisted
+    mapping(address => bool) private whitelistMap;
+
+    // flag controlling whether whitelist is enabled.
+    bool private whitelistEnabled = true;
+
+    event AddToWhitelist(address indexed _newAddress);
+    event RemoveFromWhitelist(address indexed _removedAddress);
+
+    /**
+   * @dev Enable or disable the whitelist
+   * @param _enabled bool of whether to enable the whitelist.
+   */
+    function enableWhitelist(bool _enabled) public onlyOwner {
+        whitelistEnabled = _enabled;
+    }
+
+    /**
+   * @dev Adds the provided address to the whitelist
+   * @param _newAddress address to be added to the whitelist
+   */
+    function addToWhitelist(address _newAddress) public onlyOwner {
+        _whitelist(_newAddress);
+        emit AddToWhitelist(_newAddress);
+    }
+
+    /**
+   * @dev Removes the provided address to the whitelist
+   * @param _removedAddress address to be removed from the whitelist
+   */
+    function removeFromWhitelist(address _removedAddress) public onlyOwner {
+        _unWhitelist(_removedAddress);
+        emit RemoveFromWhitelist(_removedAddress);
+    }
+
+    /**
+   * @dev Returns whether the address is whitelisted
+   * @param _address address to check
+   * @return bool
+   */
+    function isWhitelisted(address _address) public view returns (bool) {
+        if (whitelistEnabled) {
+            return whitelistMap[_address];
+        } else {
+            return true;
+        }
+    }
+
+    /**
+   * @dev Internal function for removing an address from the whitelist
+   * @param _removedAddress address to unwhitelisted
+   */
+    function _unWhitelist(address _removedAddress) internal {
+        whitelistMap[_removedAddress] = false;
+    }
+
+    /**
+   * @dev Internal function for adding the provided address to the whitelist
+   * @param _newAddress address to be added to the whitelist
+   */
+    function _whitelist(address _newAddress) internal {
+        whitelistMap[_newAddress] = true;
+    }
+}
+
+interface IERC721Creator is IERC721 {
+    /**
+   * @dev Gets the creator of the token
+   * @param _tokenId uint256 ID of the token
+   * @return address of the creator
+   */
+    function tokenCreator(uint256 _tokenId) external view returns (address);
+}
+
+contract OZERC721 is ERC721Enumerable, IERC721Creator, Whitelist {
+    // Mapping from token ID to the creator's address.
+    mapping(uint256 => address) private _tokenCreators;
+
+    // Event indicating metadata was updated.
+    event TokenURIUpdated(uint256 indexed _tokenId, string  _uri);
+
+    constructor(string memory _name, string memory _symbol) ERC721Enumerable(_name, _symbol) {
+    }
+
+    /**
+     * @dev Whitelists a bunch of addresses.
+     * @param _whitelistees address[] of addresses to whitelist.
+     */
+    function initWhitelist(address[] memory _whitelistees) public onlyOwner {
+        // Add all whitelistees.
+        for (uint256 i = 0; i < _whitelistees.length; i++) {
+            address creator = _whitelistees[i];
+            if (!isWhitelisted(creator)) {
+                _whitelist(creator);
+            }
+        }
+    }
+
+    /**
+     * @dev Checks that the token is owned by the sender.
+     * @param _tokenId uint256 ID of the token.
+     */
+    modifier onlyTokenOwner(uint256 _tokenId) {
+        address owner = ownerOf(_tokenId);
+        require(owner == msg.sender, "OZERC721: must be the owner of the token");
+        _;
+    }
+
+    /**
+     * @dev Checks that the token was created by the sender.
+     * @param _tokenId uint256 ID of the token.
+     */
+    modifier onlyTokenCreator(uint256 _tokenId) {
+        address creator = tokenCreator(_tokenId);
+        require(creator == msg.sender, "OZERC721: must be the creator of the token");
+        _;
+    }
+
+    /**
+     * @dev Adds a new unique token to the supply.
+     */
+    function addNewToken() public {
+        require(isWhitelisted(msg.sender), "OZERC721: must be whitelisted to create tokens");
+        _createToken(msg.sender);
+    }
+
+    /**
+     * @dev Deletes the token with the provided ID.
+     * @param _tokenId uint256 ID of the token.
+     */
+    function deleteToken(uint256 _tokenId) public {
+        require(_isApprovedOrOwner(_msgSender(), _tokenId), "OZERC721: caller is not owner nor approved");
+        _burn(_tokenId);
+        delete _tokenCreators[_tokenId];
+    }
+
+    //    /**
+    //     * @dev Updates the token metadata if the owner is also the
+    //     *      creator.
+    //     * @param _tokenId uint256 ID of the token.
+    //     * @param _uri string metadata URI.
+    //     */
+    //    function updateTokenMetadata(uint256 _tokenId, string _uri) public onlyTokenOwner(_tokenId) onlyTokenCreator(_tokenId) {
+    //        _setTokenURI(_tokenId, _uri);
+    //        emit TokenURIUpdated(_tokenId, _uri);
+    //    }
+
+    /**
+    * @dev Gets the creator of the token.
+    * @param _tokenId uint256 ID of the token.
+    * @return address of the creator.
+    */
+    function tokenCreator(uint256 _tokenId) public view override returns (address) {
+        address creator = _tokenCreators[_tokenId];
+        require(creator != address(0), "OZERC721: creator query for nonexistent token");
+        return creator;
+    }
+
+
+    /**
+     * @dev Internal function for setting the token's creator.
+     * @param _tokenId uint256 id of the token.
+     * @param _creator address of the creator of the token.
+     */
+    function _setTokenCreator(uint256 _tokenId, address _creator) internal {
+        _tokenCreators[_tokenId] = _creator;
+    }
+
+    /**
+     * @dev Base URI for computing {tokenURI}. Empty by default, can be overriden
+     * in child contracts.
+     */
+    function _baseURI() internal pure override returns (string memory) {
+        return "https://www.noitom.com/";
+    }
+
+    /**
+     * @dev Internal function creating a new token.
+     * @param _creator address of the creator of the token.
+     */
+    function _createToken(address _creator) internal returns (uint256) {
+        uint256 newId = totalSupply() + 1;
+        _safeMint(_creator, newId);
+        _setTokenCreator(newId, _creator);
+        return newId;
+    }
+}
