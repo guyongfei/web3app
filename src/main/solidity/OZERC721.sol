@@ -1249,7 +1249,7 @@ contract OZERC721 is ERC721Enumerable, IERC721Creator, Whitelist {
      * in child contracts.
      */
     function _baseURI() internal pure override returns (string memory) {
-        return "https://www.noitom.com/";
+        return "https://www.somebody.com/"; //TODO
     }
 
     /**
