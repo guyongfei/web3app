@@ -870,6 +870,145 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     function _beforeTokenTransfer(address from, address to, uint256 tokenId) internal virtual { }
 }
 
-contract OZERC721 is ERC721 {
-    constructor() public ERC721("ArtChain", "AC") {}
+contract ERC721Enumerable is ERC165, ERC721, IERC721Enumerable{
+    // Mapping from owner to list of owned token IDs
+    mapping(address => uint256[]) private _ownedTokens;
+
+    // Mapping from token ID to index of the owner tokens list
+    mapping(uint256 => uint256) private _ownedTokensIndex;
+
+    // Array with all token ids, used for enumeration
+    uint256[] private _allTokens;
+
+    // Mapping from token id to position in the allTokens array
+    mapping(uint256 => uint256) private _allTokensIndex;
+
+    /**
+     * @dev Initializes the contract by setting a `name` and a `symbol` to the token collection.
+     */
+    constructor (string memory _name, string memory _symbol) ERC721(_name, _symbol){
+    }
+
+    /**
+     * @dev See {IERC165-supportsInterface}.
+     */
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC165, IERC165, ERC721) returns (bool) {
+        return interfaceId == type(IERC721Enumerable).interfaceId
+        || super.supportsInterface(interfaceId);
+    }
+
+    /**
+     * @dev Gets the token ID at a given index of the tokens list of the requested owner
+     * @param owner address owning the tokens list to be accessed
+     * @param index uint256 representing the index to be accessed of the requested tokens list
+     * @return uint256 token ID at the given index of the tokens list owned by the requested address
+     */
+    function tokenOfOwnerByIndex(address owner, uint256 index) public view override returns (uint256) {
+        require(index < balanceOf(owner),"ERC721Enumerable: index exceeds owner balance");
+        return _ownedTokens[owner][index];
+    }
+
+    /**
+     * @dev Gets the total amount of tokens stored by the contract
+     * @return uint256 representing the total amount of tokens
+     */
+    function totalSupply() public view override returns (uint256) {
+        return _allTokens.length;
+    }
+
+    /**
+     * @dev Gets the token ID at a given index of all the tokens in this contract
+     * Reverts if the index is greater or equal to the total number of tokens
+     * @param index uint256 representing the index to be accessed of the tokens list
+     * @return uint256 token ID at the given index of the tokens list
+     */
+    function tokenByIndex(uint256 index) public view override returns (uint256) {
+        require(index < totalSupply(),"ERC721Enumerable: index exceeds total balance");
+        return _allTokens[index];
+    }
+
+    /**
+     * @dev Hook that is called before any token transfer. This includes minting
+     * and burning.
+     *
+     * Calling conditions:
+     *
+     * - When `from` and `to` are both non-zero, ``from``'s `tokenId` will be
+     * transferred to `to`.
+     * - When `from` is zero, `tokenId` will be minted for `to`.
+     * - When `to` is zero, ``from``'s `tokenId` will be burned.
+     * - `from` cannot be the zero address.
+     * - `to` cannot be the zero address.
+     *
+     * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
+     */
+    function _beforeTokenTransfer(address from, address to, uint256 tokenId) internal virtual override{
+        super._beforeTokenTransfer(from, to, tokenId);
+        if(from == address(0)){ //minting
+            _allTokensIndex[tokenId] = _allTokens.length;
+            _allTokens.push(tokenId);
+
+            //add to
+            uint256 length = _ownedTokens[to].length;
+            _ownedTokens[to].push(tokenId);
+            _ownedTokensIndex[tokenId] = length;
+        } else if(to == address(0)) { //  burning
+            // Reorg all tokens array
+            uint256 tokenIndex = _allTokensIndex[tokenId];
+            uint256 lastTokenIndex = _allTokens.length - 1;
+            uint256 lastToken = _allTokens[lastTokenIndex];
+
+            _allTokens[tokenIndex] = lastToken;
+            _allTokens[lastTokenIndex] = 0;
+            _allTokens.pop();
+            //            _allTokensIndex[tokenId] = 0;
+            delete _allTokensIndex[tokenId];
+            _allTokensIndex[lastToken] = tokenIndex;
+
+            // Reorg ownerToken, remove from
+            // To prevent a gap in the array, we store the last token in the index of the token to delete, and
+            // then delete the last slot.
+            uint256 ownedTokenIndex = _ownedTokensIndex[tokenId];
+            uint256 ownedLastTokenIndex = _ownedTokens[from].length - 1;
+            uint256 ownedLastToken = _ownedTokens[from][ownedLastTokenIndex];
+
+            _ownedTokens[from][ownedTokenIndex] = ownedLastToken;
+            // This also deletes the contents at the last position of the array
+            _ownedTokens[from].pop();
+
+            // Note that this will handle single-element arrays. In that case, both tokenIndex and lastTokenIndex are going to
+            // be zero. Then we can make sure that we will remove tokenId from the ownedTokens list since we are first swapping
+            // the lastToken to the first position, and then dropping the element placed in the last position of the list
+            // _ownedTokensIndex[tokenId] = 0;
+            delete _ownedTokensIndex[tokenId];
+            _ownedTokensIndex[ownedLastToken] = ownedTokenIndex;
+        } else { // transferring
+            // Reorg ownerToken, remove from
+            // To prevent a gap in the array, we store the last token in the index of the token to delete, and
+            // then delete the last slot.
+            uint256 ownedTokenIndex = _ownedTokensIndex[tokenId];
+            uint256 ownedLastTokenIndex = _ownedTokens[from].length - 1;
+            uint256 ownedLastToken = _ownedTokens[from][ownedLastTokenIndex];
+
+            _ownedTokens[from][ownedTokenIndex] = ownedLastToken;
+            // This also deletes the contents at the last position of the array
+            _ownedTokens[from].pop();
+
+            // Note that this will handle single-element arrays. In that case, both tokenIndex and lastTokenIndex are going to
+            // be zero. Then we can make sure that we will remove tokenId from the ownedTokens list since we are first swapping
+            // the lastToken to the first position, and then dropping the element placed in the last position of the list
+            // _ownedTokensIndex[tokenId] = 0;
+            delete _ownedTokensIndex[tokenId];
+            _ownedTokensIndex[ownedLastToken] = ownedTokenIndex;
+
+            //add to
+            uint256 length = _ownedTokens[to].length;
+            _ownedTokens[to].push(tokenId);
+            _ownedTokensIndex[tokenId] = length;
+        }
+    }
 }
+
+//contract OZERC721 is ERC721 {
+//    constructor() public ERC721("ArtChain", "AC") {}
+//}
