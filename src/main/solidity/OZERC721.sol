@@ -1129,7 +1129,8 @@ contract Whitelist is Ownable {
    * @param _removedAddress address to unwhitelisted
    */
     function _unWhitelist(address _removedAddress) internal {
-        whitelistMap[_removedAddress] = false;
+//        whitelistMap[_removedAddress] = false;
+        delete whitelistMap[_removedAddress];
     }
 
     /**
