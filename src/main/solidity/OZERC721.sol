@@ -1258,7 +1258,7 @@ contract OZERC721 is ERC721Enumerable, IERC721Creator, Whitelist {
      * @param _creator address of the creator of the token.
      */
     function _createToken(address _creator) internal returns (uint256) {
-        uint256 newId = totalSupply() + 1;
+        uint256 newId = totalSupply() + 1; //TODO: bug, should use fixCounter
         _safeMint(_creator, newId);
         _setTokenCreator(newId, _creator);
         return newId;
