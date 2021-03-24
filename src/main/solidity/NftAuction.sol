@@ -307,10 +307,11 @@ contract NftAuction is Ownable{
         _;
     }
 
-    modifier _onlyTokenApprover(IOZERC721 ozerc721, uint256 tokenId) {
-        require(ozerc721.ownerOf(tokenId) == _msgSender()
-            || ozerc721.getApproved(tokenId) == _msgSender()
-            || ozerc721.isApprovedForAll(ozerc721.ownerOf(tokenId), _msgSender() ), "NftAuction: operator is not approved");
+    modifier _onlyTokenApprover(IOZERC721 _ozerc721, uint256 tokenId) {
+        require(_ozerc721.ownerOf(tokenId) == _msgSender()
+        || _ozerc721.getApproved(tokenId) == _msgSender()
+            || _ozerc721.isApprovedForAll(_ozerc721.ownerOf(tokenId), _msgSender()), "NftAuction: operator is not approved");
+        _;
     }
 
     constructor(address _ozerc721) _onlyErc721(_ozerc721){
@@ -336,7 +337,7 @@ contract NftAuction is Ownable{
      * - `_startBlock` when this _startBlock is mined, the auction starts
      * - `_durBlocks` when _startBlock+_durBlocks is mined, the auction ends.
      */
-    function scheduleAuction(uint256 _tokenId, uint256 _startPrice, uint256 _startBlock, uint256 _durBlocks) _onlyTokenApprover(_tokenId, ozerc721) external {
+    function scheduleAuction(uint256 _tokenId, uint256 _startPrice, uint256 _startBlock, uint256 _durBlocks) _onlyTokenApprover(ozerc721, _tokenId) external {
 
     }
 
