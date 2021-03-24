@@ -14,22 +14,22 @@ import org.web3j.tx.gas.ContractGasProvider;
 
 @EVMTest(type = NodeType.GETH)
 class HelloWorldTest {
-  private static HelloWorld helloWorld;
-
-  @Test
-  public void greeting() throws Exception {
-    String stringVar = helloWorld.greeting().send();
-    Assertions.assertEquals("REPLACE_ME", stringVar);
-  }
-
-  @Test
-  public void newGreeting() throws Exception {
-    TransactionReceipt transactionReceiptVar = helloWorld.newGreeting("REPLACE_ME").send();
-    Assertions.assertTrue(transactionReceiptVar.isStatusOK());
-  }
-
-  @BeforeAll
-  static void deploy(Web3j web3j, TransactionManager transactionManager, ContractGasProvider contractGasProvider) throws Exception {
-    helloWorld = HelloWorld.deploy(web3j, transactionManager, contractGasProvider, "REPLACE_ME").send();
-  }
+//  private static HelloWorld helloWorld;
+//
+//  @Test
+//  public void greeting() throws Exception {
+//    String stringVar = helloWorld.greeting().send();
+//    Assertions.assertEquals("REPLACE_ME", stringVar);
+//  }
+//
+//  @Test
+//  public void newGreeting() throws Exception {
+//    TransactionReceipt transactionReceiptVar = helloWorld.newGreeting("REPLACE_ME").send();
+//    Assertions.assertTrue(transactionReceiptVar.isStatusOK());
+//  }
+//
+//  @BeforeAll
+//  static void deploy(Web3j web3j, TransactionManager transactionManager, ContractGasProvider contractGasProvider) throws Exception {
+//    helloWorld = HelloWorld.deploy(web3j, transactionManager, contractGasProvider, "REPLACE_ME").send();
+//  }
 }
