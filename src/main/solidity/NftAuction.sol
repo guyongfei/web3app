@@ -284,12 +284,12 @@ contract NftAuction is Ownable{
     }
 
     //tokenId to AuctionType, to check if a token is in auction
-    mapping(uint256=>Auction) private auctions;
+    mapping(uint256=>SAuction) private sAuctions;
 
     //tokenId to AuctionBid, when in Bidding or End state
-    mapping(uint256=>AuctionBid) private auctionBids;
+    mapping(uint256=>BidAuction) private bidAuction;
 
-    mapping(uint256=>)
+    mapping(uint256=>OngoingAuction) private ongoingAuctions;
 
     event Erc721Changed(address indexed _from, address indexed _to);
     event ScheduleAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner, uint256 startPrice, uint256 startBlock, uint256 durBlocks);
