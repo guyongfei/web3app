@@ -255,11 +255,11 @@ contract NftAuction is Ownable{
     IOZERC721 private ozerc721;
     address public ozerc721Addr;
 
-    enum AuctionType {Reserve, Schedule}
+    enum AuctionType {None, Reserve, Schedule}
 
     //Reserve Auction: NotStart -> StartBid -> End
     //Schedule Auction: NotStart -> Start -> StartBid -> End
-    enum AuctionState {NotStart, Start, Bidding, End}
+    enum AuctionState {Start, Bidding, End}
 
     struct RAuction{ //Reserve Auction
         uint256 startPrice;
@@ -272,24 +272,30 @@ contract NftAuction is Ownable{
     }
 
     struct OngoingAuction { //Start Auction put here
-        AuctionState state;
+        AuctionState state; //Start, Bidding, End
         uint256 startBlock;
         uint256 durBlocks;
     }
-
 
     struct BidAuction{ // StartBid Auction's bid info put here
         uint256 currentBid;
         address payable currentBidder;
     }
 
-    //tokenId to AuctionType, to check if a token is in auction
+    //tokenId to AuctionType, this is used to check a token is in Auction or not.
+    mapping(uint256=>AuctionType) private auctionType;
+
+    //tokenId to Reserve Auction.
+    mapping(uint256=>RAuction) private rAuctions;
+
+    //tokenId to Schedule Auction.
     mapping(uint256=>SAuction) private sAuctions;
 
-    //tokenId to AuctionBid, when in Bidding or End state
-    mapping(uint256=>BidAuction) private bidAuction;
-
+    //tokenId to OngoingAuction, when started
     mapping(uint256=>OngoingAuction) private ongoingAuctions;
+
+    //tokenId to AuctionBid, when in Bidding or End state
+    mapping(uint256=>BidAuction) private bidAuctions;
 
     event Erc721Changed(address indexed _from, address indexed _to);
     event ScheduleAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner, uint256 startPrice, uint256 startBlock, uint256 durBlocks);
@@ -314,10 +320,35 @@ contract NftAuction is Ownable{
         _;
     }
 
-    constructor(address _ozerc721) _onlyErc721(_ozerc721){
-        ozerc721Addr = _ozerc721;
-        ozerc721 = IOZERC721(_ozerc721);
-        emit Erc721Changed(address(0), _ozerc721);
+    // constructor(address _ozerc721) _onlyErc721(_ozerc721){
+    //     ozerc721Addr = _ozerc721;
+    //     ozerc721 = IOZERC721(_ozerc721);
+    //     emit Erc721Changed(address(0), _ozerc721);
+    // }
+    constructor() {
+
+    }
+
+    //TODO: test
+    function getAuctionType(uint256 _tokenId) view external returns(AuctionType){
+        AuctionType aType = auctionType[_tokenId];
+        return aType;
+    }
+
+    //TODO: test
+    function checkAuctionType(uint256 _tokenId) view external{
+        AuctionType aType = auctionType[_tokenId];
+        require(aType == AuctionType.None, "NftAuction: tokenId should not been in auction");
+    }
+
+    //TODO: test
+    function setAuctionType(uint256 _tokenId, AuctionType aType) external {
+        auctionType[_tokenId] = aType;
+    }
+
+    //TODO: test
+    function getBlock() view external returns(uint){
+        return block.number;
     }
 
     function setErc721Addr(address _ozerc721) onlyOwner _onlyErc721(_ozerc721) external {
@@ -338,7 +369,11 @@ contract NftAuction is Ownable{
      * - `_durBlocks` when _startBlock+_durBlocks is mined, the auction ends.
      */
     function scheduleAuction(uint256 _tokenId, uint256 _startPrice, uint256 _startBlock, uint256 _durBlocks) _onlyTokenApprover(ozerc721, _tokenId) external {
-
+        AuctionType aType = auctionType[_tokenId];
+        require(aType == AuctionType.None, "NftAuction: tokenId should not been in auction");
+        require(_startBlock>block.number+70, "NftAuction: startTime must be 15 mins later");
+        require(_durBlocks>277, "NftAuction: Schedule auction must last at least 1 hour");
+//        SAuction sAuction =
     }
 
     /**
