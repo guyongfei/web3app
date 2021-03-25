@@ -251,7 +251,25 @@ abstract contract Ownable is Context {
 }
 
 
-contract NftAuction is Ownable{
+/**
+ * @title ERC721 token receiver interface
+ * @dev Interface for any contract that wants to support safeTransfers
+ * from ERC721 asset contracts.
+ */
+interface IERC721Receiver {
+    /**
+     * @dev Whenever an {IERC721} `tokenId` token is transferred to this contract via {IERC721-safeTransferFrom}
+     * by `operator` from `from`, this function is called.
+     *
+     * It must return its Solidity selector to confirm the token transfer.
+     * If any other value is returned or the interface is not implemented by the recipient, the transfer will be reverted.
+     *
+     * The selector can be obtained in Solidity with `IERC721.onERC721Received.selector`.
+     */
+    function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata data) external returns (bytes4);
+}
+
+contract NftAuction is Ownable, IERC721Receiver{
     IOZERC721 private ozerc721;
     address public ozerc721Addr;
 
@@ -259,7 +277,7 @@ contract NftAuction is Ownable{
 
     //Reserve Auction: NotStart -> StartBid -> End
     //Schedule Auction: NotStart -> Start -> StartBid -> End
-    enum AuctionState {Start, Bidding, End}
+    enum AuctionState {None, Start, Bidding, End}
 
     struct RAuction{ //Reserve Auction
         uint256 startPrice;
@@ -283,19 +301,19 @@ contract NftAuction is Ownable{
     }
 
     //tokenId to AuctionType, this is used to check a token is in Auction or not.
-    mapping(uint256=>AuctionType) private auctionType;
+    mapping(uint256=>AuctionType) public auctionType;
 
     //tokenId to Reserve Auction.
-    mapping(uint256=>RAuction) private rAuctions;
+    mapping(uint256=>RAuction) public rAuctions;
 
     //tokenId to Schedule Auction.
-    mapping(uint256=>SAuction) private sAuctions;
+    mapping(uint256=>SAuction) public sAuctions;
 
     //tokenId to OngoingAuction, when started
-    mapping(uint256=>OngoingAuction) private ongoingAuctions;
+    mapping(uint256=>OngoingAuction) public ongoingAuctions;
 
     //tokenId to AuctionBid, when in Bidding or End state
-    mapping(uint256=>BidAuction) private bidAuctions;
+    mapping(uint256=>BidAuction) public bidAuctions;
 
     event Erc721Changed(address indexed _from, address indexed _to);
     event ScheduleAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner, uint256 startPrice, uint256 startBlock, uint256 durBlocks);
@@ -320,6 +338,7 @@ contract NftAuction is Ownable{
         _;
     }
 
+    //TODO:test
     // constructor(address _ozerc721) _onlyErc721(_ozerc721){
     //     ozerc721Addr = _ozerc721;
     //     ozerc721 = IOZERC721(_ozerc721);
@@ -330,25 +349,12 @@ contract NftAuction is Ownable{
     }
 
     //TODO: test
-    function getAuctionType(uint256 _tokenId) view external returns(AuctionType){
-        AuctionType aType = auctionType[_tokenId];
-        return aType;
+    function getAddr() view external returns(address){
+        return address(this);
     }
 
-    //TODO: test
-    function checkAuctionType(uint256 _tokenId) view external{
-        AuctionType aType = auctionType[_tokenId];
-        require(aType == AuctionType.None, "NftAuction: tokenId should not been in auction");
-    }
-
-    //TODO: test
-    function setAuctionType(uint256 _tokenId, AuctionType aType) external {
-        auctionType[_tokenId] = aType;
-    }
-
-    //TODO: test
-    function getBlock() view external returns(uint){
-        return block.number;
+    function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata data) external override returns (bytes4){
+        return IERC721Receiver.onERC721Received.selector;
     }
 
     function setErc721Addr(address _ozerc721) onlyOwner _onlyErc721(_ozerc721) external {
@@ -368,12 +374,16 @@ contract NftAuction is Ownable{
      * - `_startBlock` when this _startBlock is mined, the auction starts
      * - `_durBlocks` when _startBlock+_durBlocks is mined, the auction ends.
      */
-    function scheduleAuction(uint256 _tokenId, uint256 _startPrice, uint256 _startBlock, uint256 _durBlocks) _onlyTokenApprover(ozerc721, _tokenId) external {
+    //    function scheduleAuction(uint256 _tokenId, uint256 _startPrice, uint256 _startBlock, uint256 _durBlocks) _onlyTokenApprover(ozerc721, _tokenId) external {
+    function scheduleAuction(uint256 _tokenId, uint256 _startPrice, uint256 _startBlock, uint256 _durBlocks) external {
         AuctionType aType = auctionType[_tokenId];
         require(aType == AuctionType.None, "NftAuction: tokenId should not been in auction");
         require(_startBlock>block.number+70, "NftAuction: startTime must be 15 mins later");
         require(_durBlocks>277, "NftAuction: Schedule auction must last at least 1 hour");
-//        SAuction sAuction =
+//        ozerc721.safeTransferFrom(ozerc721.ownerOf(_tokenId), address(this), _tokenId); //TODO
+        auctionType[_tokenId] = AuctionType.Schedule;
+        sAuctions[_tokenId] = SAuction({startPrice:_startPrice, startBlock:_startBlock, durBlocks:_durBlocks});
+        //TODO: emit ScheduleAuction(ozerc721Addr, _tokenId, ozerc721.ownerOf(_tokenId), _startPrice, _startBlock, _durBlocks);
     }
 
     /**
@@ -384,8 +394,15 @@ contract NftAuction is Ownable{
      * - `_startPrice` must have value bigger than zero
      * - `_durBlocks` when _startBlock+_durBlocks is mined, the auction ends.
      */
+    //    function reserveAuction(uint256 _tokenId, uint256 _startPrice, uint256 _durBlocks)  _onlyTokenApprover(ozerc721, _tokenId)  external {
     function reserveAuction(uint256 _tokenId, uint256 _startPrice, uint256 _durBlocks) external {
-
+        AuctionType aType = auctionType[_tokenId];
+        require(aType == AuctionType.None, "NftAuction: tokenId should not been in auction");
+        require(_startPrice>0, "NftAuction: startPrice must have value");
+        require(_durBlocks>277, "NftAuction: Schedule auction must last at least 1 hour");
+        auctionType[_tokenId] = AuctionType.Reserve;
+        rAuctions[_tokenId] = RAuction({startPrice:_startPrice});
+        //TODO: emit ReserveAuction(ozerc721Addr, _tokenId, ozerc721.ownerOf(_tokenId), _startPrice, _durBlocks);
     }
 
 
@@ -395,9 +412,34 @@ contract NftAuction is Ownable{
      * Requirements:
      * - `_tokenId` must exist.
      */
+//    function cancelAuction(uint256 _tokenId) _onlyTokenApprover(ozerc721, _tokenId) external {
     function cancelAuction(uint256 _tokenId) external {
+        AuctionType aType = auctionType[_tokenId];
+        require(aType != AuctionType.None, "NftAuction: tokenId should been in auction");
+        AuctionState aState = ongoingAuctions[_tokenId].state;
+        if(aType == AuctionType.Reserve){
+            require(aState == AuctionState.None, "NftAuction: reserve auction already start");
+            delete rAuctions[_tokenId];
+        }else{ // AuctionType.Schedule
+            require(block.number < sAuctions[_tokenId].startBlock, "NftAuction: schedule auction already start");
+            delete sAuctions[_tokenId];
+        }
 
+        delete auctionType[_tokenId];
+        //TODO: emit CancelAuction(ozerc721Addr, _tokenId, _msgSender());
     }
+
+    /**
+     * @dev correct the token auction state.
+     */
+//    function correctTokenState(uint256 _tokenId) internal {
+//        AuctionType aType = auctionType[_tokenId];
+//        if(aType == AuctionType.Reserve){
+//            if(ongoingAuctions[_tokenId].state )
+//        } else if(aType == AuctionType.Schedule){
+//
+//        }
+//    }
 
 
     /**
