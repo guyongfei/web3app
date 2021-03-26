@@ -315,6 +315,9 @@ contract NftAuction is Ownable, IERC721Receiver{
     //tokenId to AuctionBid, when in Bidding or End state
     mapping(uint256=>BidAuction) public bidAuctions;
 
+    //tokenId to Origin Owner. when an auction start, the token will be mortgaged to this address.
+    mapping(uint256=>address) public origOwner;
+
     event Erc721Changed(address indexed _from, address indexed _to);
     event ScheduleAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner, uint256 startPrice, uint256 startBlock, uint256 durBlocks);
     event ReserveAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner, uint256 startPrice, uint256 durBlocks);
@@ -332,9 +335,12 @@ contract NftAuction is Ownable, IERC721Receiver{
     }
 
     modifier _onlyTokenApprover(IOZERC721 _ozerc721, uint256 tokenId) {
-        require(_ozerc721.ownerOf(tokenId) == _msgSender()
-        || _ozerc721.getApproved(tokenId) == _msgSender()
-            || _ozerc721.isApprovedForAll(_ozerc721.ownerOf(tokenId), _msgSender()), "NftAuction: operator is not approved");
+        address sender = _msgSender();
+        require(_ozerc721.ownerOf(tokenId) == sender
+                || _ozerc721.getApproved(tokenId) == sender
+                || _ozerc721.isApprovedForAll(_ozerc721.ownerOf(tokenId), sender)
+                || origOwner[tokenId] == sender,
+                "NftAuction: operator is not approved");
         _;
     }
 
@@ -381,6 +387,7 @@ contract NftAuction is Ownable, IERC721Receiver{
         require(_startBlock>block.number+70, "NftAuction: startTime must be 15 mins later");
         require(_durBlocks>277, "NftAuction: Schedule auction must last at least 1 hour");
 //        ozerc721.safeTransferFrom(ozerc721.ownerOf(_tokenId), address(this), _tokenId); //TODO
+        origOwner[_tokenId] =
         auctionType[_tokenId] = AuctionType.Schedule;
         sAuctions[_tokenId] = SAuction({startPrice:_startPrice, startBlock:_startBlock, durBlocks:_durBlocks});
         //TODO: emit ScheduleAuction(ozerc721Addr, _tokenId, ozerc721.ownerOf(_tokenId), _startPrice, _startBlock, _durBlocks);
