@@ -603,12 +603,6 @@ contract NftTrans is Ownable{
         address creator = ozerc721.tokenCreator(_tokenId);
         ozerc721.safeTransferFrom(tokenOwner, currentOfferer, _tokenId); //不通过delegatecall，能成功，但需要approve，
 
-        //openzeppelin封装的functionDelegateCall，失败。 ERC721那边报错tokenid不存在，感觉参数传输失败
-//        ozerc721Addr.functionDelegateCall(abi.encodeWithSignature("safeTransferFrom(address,address,uint256)",tokenOwner,currentOfferer,_tokenId));
-
-        //自己直接调用，也不能成功
-//        (bool success, bytes memory returndata) = ozerc721Addr.delegatecall(abi.encodeWithSignature("safeTransferFrom(address,address,uint256)",tokenOwner,currentOfferer,_tokenId));
-
         payout(currentOffer, owner(), creator, tokenOwner, _tokenId);
         clearOffer(_tokenId);
         AcceptOffer(currentOfferer, tokenOwner, currentOffer, _tokenId);
