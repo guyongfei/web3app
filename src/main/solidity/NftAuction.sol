@@ -296,7 +296,7 @@ contract NftAuction is Ownable, IERC721Receiver{
         uint256 startBlock;
         uint256 durBlocks;
         uint256 currentBid;
-        address payable currentBidder;
+        address currentBidder;
         uint256 payValue;
     }
 
@@ -320,7 +320,7 @@ contract NftAuction is Ownable, IERC721Receiver{
     event ReserveAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner, uint256 startPrice, uint256 durBlocks);
     event CancelAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner);
     event Bid(address indexed erc721, uint256 indexed tokenId, address indexed newBidder, uint256 bidValue, address oldBidder, uint256 newDurBlocks, bool triggerAuction);
-    event Pay(address indexed payAddr,  uint256 payValue); //for returnBid: payValue is 1.03 times of value.
+    event Payoff(address indexed payAddr, uint256 payValue);
     event SettleAuction(address indexed erc721, uint256 indexed tokenId, address indexed buyer, address seller, uint256 price);
 
     /**
@@ -467,7 +467,7 @@ contract NftAuction is Ownable, IERC721Receiver{
             delete rAuctions[_tokenId];
         }else{ // AuctionType.Schedule
             require(block.number < sAuctions[_tokenId].startBlock, "NftAuction: schedule auction already start");
-            ozerc721(_tokenId).safeTransferFrom(address(this), origOwner[_tokenId], _tokenId);
+            ozerc721.safeTransferFrom(address(this), origOwner[_tokenId], _tokenId);
             delete origOwner[_tokenId];
             delete sAuctions[_tokenId];
         }
@@ -511,7 +511,7 @@ contract NftAuction is Ownable, IERC721Receiver{
             uint256 oldDurBlocks = biddingAuctions[_tokenId].durBlocks;
             uint256 oldEndBlock = biddingAuctions[_tokenId].startBlock + oldDurBlocks;
             uint256 oldBid = biddingAuctions[_tokenId].currentBid;
-            address payable oldBidder = biddingAuctions[_tokenId].currentBidder;
+            address oldBidder = biddingAuctions[_tokenId].currentBidder;
             uint256 oldPayValue = biddingAuctions[_tokenId].payValue;
             uint256 newDurBlocks = 0;
             
@@ -524,9 +524,9 @@ contract NftAuction is Ownable, IERC721Receiver{
                 newDurBlocks = block.number + 70 - biddingAuctions[_tokenId].startBlock;
                 biddingAuctions[_tokenId].durBlocks = newDurBlocks;
             }
-            oldBidder.transfer(oldPayValue);
+            payable(oldBidder).transfer(oldPayValue);
 
-            emit Pay(oldBidder,  returnValue);
+            emit Payoff(oldBidder,  oldPayValue);
             emit Bid(ozerc721Addr, _tokenId, _msgSender(), _value, oldBidder, newDurBlocks, false);
         } else {
             uint256 newDurBlocks = 0;
@@ -584,11 +584,11 @@ contract NftAuction is Ownable, IERC721Receiver{
         if(biddingAuctions[_tokenId].startBlock != 0){
             require(block.number > biddingAuctions[_tokenId].startBlock + biddingAuctions[_tokenId].durBlocks, "NftAuction: auction not finish");
             address sender = _msgSender();
-            require(origOwner[tokenId] != address(0), "NftAuction: origOwner must have value");
-            require(ozerc721.ownerOf(tokenId) == sender
-            || ozerc721.getApproved(tokenId) == sender
-            || origOwner[tokenId] == sender
-            || ozerc721.isApprovedForAll(origOwner[tokenId], sender)
+            require(origOwner[_tokenId] != address(0), "NftAuction: origOwner must have value");
+            require(ozerc721.ownerOf(_tokenId) == sender
+            || ozerc721.getApproved(_tokenId) == sender
+            || origOwner[_tokenId] == sender
+            || ozerc721.isApprovedForAll(origOwner[_tokenId], sender)
             || biddingAuctions[_tokenId].currentBidder == sender,
                 "NftAuction: operator is not approved");
 
@@ -616,10 +616,10 @@ contract NftAuction is Ownable, IERC721Receiver{
             }
 
             address sender = _msgSender();
-            require(ozerc721.ownerOf(tokenId) == sender
-            || ozerc721.getApproved(tokenId) == sender
-            || origOwner[tokenId] == sender
-            || ozerc721.isApprovedForAll(origOwner[tokenId], sender),
+            require(ozerc721.ownerOf(_tokenId) == sender
+            || ozerc721.getApproved(_tokenId) == sender
+            || origOwner[_tokenId] == sender
+            || ozerc721.isApprovedForAll(origOwner[_tokenId], sender),
             "NftAuction: operator is not approved");
             require(block.number > sAuctions[_tokenId].startBlock + sAuctions[_tokenId].durBlocks, "NftAuction: schedule auction not finish");
 
@@ -645,11 +645,11 @@ contract NftAuction is Ownable, IERC721Receiver{
         uint256 maintainerAucPayment = _val * maintainerAucPer / 1000;
         uint256 ownerPayment = _val - maintainerAucPayment;
         (payable(_transAddr)).transfer(maintainerTransPayment);
-        emit Pay(_transAddr,  maintainerTransPayment);
+        emit Payoff(_transAddr,  maintainerTransPayment);
         (payable(_aucAddr)).transfer(maintainerAucPayment);
-        emit Pay(_aucAddr,  maintainerAucPayment);
+        emit Payoff(_aucAddr,  maintainerAucPayment);
         (payable(_tokenOwner)).transfer(ownerPayment);
-        emit Pay(_tokenOwner,  ownerPayment);
+        emit Payoff(_tokenOwner,  ownerPayment);
     }
 
 }

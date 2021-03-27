@@ -1,1 +1,1 @@
-D:\code\solidity\Web3App\tools\solc-windows_v0.8.2.exe  -o D:\code\solidity\Web3App\build\resources\main\solidity\ --bin --abi --gas --optimize OZERC721.sol
+c:\code\java\Web3App\tools\solc-windows_v0.8.2.exe  -o C:\tmp\ntf\ --bin --abi --gas --optimize NftAuction.sol
