@@ -334,17 +334,17 @@ contract NftAuction is Ownable, IERC721Receiver{
     modifier _onlyTokenApprover(IOZERC721 _ozerc721, uint256 tokenId) {
         address sender = _msgSender();
         require(_ozerc721.ownerOf(tokenId) == sender
-                || _ozerc721.getApproved(tokenId) == sender
-                || _ozerc721.isApprovedForAll(_ozerc721.ownerOf(tokenId), sender)
-                || origOwner[tokenId] == sender,
-                "NftAuction: operator is not approved");
+        || _ozerc721.getApproved(tokenId) == sender
+        || _ozerc721.isApprovedForAll(_ozerc721.ownerOf(tokenId), sender)
+            || origOwner[tokenId] == sender,
+            "NftAuction: operator is not approved");
         _;
     }
 
     modifier _notTokenApprover(IOZERC721 _ozerc721, uint256 tokenId) {
         address sender = _msgSender();
         require(_ozerc721.ownerOf(tokenId) != sender
-            && _ozerc721.getApproved(tokenId) != sender
+        && _ozerc721.getApproved(tokenId) != sender
             && !_ozerc721.isApprovedForAll(_ozerc721.ownerOf(tokenId), sender)
             && origOwner[tokenId] != sender,
             "NftAuction: operator is approver");
@@ -366,7 +366,7 @@ contract NftAuction is Ownable, IERC721Receiver{
         return address(this);
     }
 
-    function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata data) external override returns (bytes4){
+    function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata data) external pure override returns (bytes4){
         return IERC721Receiver.onERC721Received.selector;
     }
 
@@ -458,7 +458,7 @@ contract NftAuction is Ownable, IERC721Receiver{
      * Requirements:
      * - `_tokenId` must exist.
      */
-//    function cancelAuction(uint256 _tokenId) _onlyTokenApprover(ozerc721, _tokenId) external {
+    //    function cancelAuction(uint256 _tokenId) _onlyTokenApprover(ozerc721, _tokenId) external {
     function cancelAuction(uint256 _tokenId) external {
         AuctionType aType = auctionType[_tokenId];
         require(aType != AuctionType.None, "NftAuction: tokenId should been in auction");
@@ -500,7 +500,7 @@ contract NftAuction is Ownable, IERC721Receiver{
      * - `_tokenId` must exist.
      * - `_value` must bid value.
      */
-//    function bid(uint256 _tokenId, uint256 _value) _notTokenApprover(ozerc721, _tokenId) external payable {
+    //    function bid(uint256 _tokenId, uint256 _value) _notTokenApprover(ozerc721, _tokenId) external payable {
     function bid(uint256 _tokenId, uint256 _value) external payable {
         AuctionType aType = auctionType[_tokenId];
         require(aType != AuctionType.None, "NftAuction: tokenId should been in auction");
@@ -514,9 +514,9 @@ contract NftAuction is Ownable, IERC721Receiver{
             address oldBidder = biddingAuctions[_tokenId].currentBidder;
             uint256 oldPayValue = biddingAuctions[_tokenId].payValue;
             uint256 newDurBlocks = 0;
-            
+
             require(block.number <= oldEndBlock, "NftAuction: auction time out");
-            require(_value > biddingAuctions[_tokenId].currentBid, "NftAuction: new bidder must be bigger");
+            require(_value > oldBid, "NftAuction: new bidder must be bigger");
             biddingAuctions[_tokenId].currentBid = _value;
             biddingAuctions[_tokenId].currentBidder = _msgSender();
             biddingAuctions[_tokenId].payValue = msg.value;
@@ -539,19 +539,19 @@ contract NftAuction is Ownable, IERC721Receiver{
                     newDurBlocks = block.number + 70 - sAuctions[_tokenId].startBlock;
                 }
                 biddingAuctions[_tokenId] = BiddingAuction({startBlock:sAuctions[_tokenId].startBlock,
-                                                            durBlocks:newDurBlocks,
-                                                            currentBid:_value,
-                                                            currentBidder:payable(_msgSender()),
-                                                            payValue:msg.value});
+                durBlocks:newDurBlocks,
+                currentBid:_value,
+                currentBidder:payable(_msgSender()),
+                payValue:msg.value});
 
             } else {
                 require(_value>=rAuctions[_tokenId].startPrice,"NftAuction: value too small");
                 newDurBlocks = rAuctions[_tokenId].durBlocks;
                 biddingAuctions[_tokenId] = BiddingAuction({startBlock:block.number,
-                                            durBlocks:newDurBlocks,
-                                            currentBid:_value,
-                                            currentBidder:payable(_msgSender()),
-                                            payValue:msg.value});
+                durBlocks:newDurBlocks,
+                currentBid:_value,
+                currentBidder:payable(_msgSender()),
+                payValue:msg.value});
                 origOwner[_tokenId] = ozerc721.ownerOf(_tokenId);
                 ozerc721.safeTransferFrom(ozerc721.ownerOf(_tokenId), address(this), _tokenId);
             }
@@ -589,7 +589,7 @@ contract NftAuction is Ownable, IERC721Receiver{
             || ozerc721.getApproved(_tokenId) == sender
             || origOwner[_tokenId] == sender
             || ozerc721.isApprovedForAll(origOwner[_tokenId], sender)
-            || biddingAuctions[_tokenId].currentBidder == sender,
+                || biddingAuctions[_tokenId].currentBidder == sender,
                 "NftAuction: operator is not approved");
 
             uint256 payValue = biddingAuctions[_tokenId].payValue;
@@ -619,8 +619,8 @@ contract NftAuction is Ownable, IERC721Receiver{
             require(ozerc721.ownerOf(_tokenId) == sender
             || ozerc721.getApproved(_tokenId) == sender
             || origOwner[_tokenId] == sender
-            || ozerc721.isApprovedForAll(origOwner[_tokenId], sender),
-            "NftAuction: operator is not approved");
+                || ozerc721.isApprovedForAll(origOwner[_tokenId], sender),
+                "NftAuction: operator is not approved");
             require(block.number > sAuctions[_tokenId].startBlock + sAuctions[_tokenId].durBlocks, "NftAuction: schedule auction not finish");
 
             address tokenOwner = origOwner[_tokenId];
