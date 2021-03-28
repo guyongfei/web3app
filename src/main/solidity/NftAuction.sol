@@ -269,15 +269,26 @@ interface IERC721Receiver {
     function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata data) external returns (bytes4);
 }
 
+interface NftTokenSold {
+    function setTokenSold(uint256 tokenId) external;
+    function getTokenSold(uint256 tokenId) view external returns(bool);
+}
+
 contract NftAuction is Ownable, IERC721Receiver{
     IOZERC721 private ozerc721;
     address public ozerc721Addr;
 
+    NftTokenSold private nftTokenSold;
+    address public ntfTokenSoldAddr;
+
     // Percentage to owner of Platform for trans fee. 3%
     uint256 public maintainerTransPer = 30;
 
-    // Percentage to owner of Platform for auction fee. 15%
-    uint256 public maintainerAucPer = 150;
+    // Percentage to owner of Platform for first trans fee. 15%
+    uint256 public firstHandFeePer = 150;
+
+    // Percentage to creator for n-hands trans fee. 10%
+    uint256 public secondHandFeePer = 100;
 
     enum AuctionType {None, Reserve, Schedule}
 
@@ -316,6 +327,7 @@ contract NftAuction is Ownable, IERC721Receiver{
     mapping(uint256=>address) public origOwner;
 
     event Erc721Changed(address indexed _from, address indexed _to);
+    event NtfTokenSoldChanged(address indexed _from, address indexed _to);
     event ScheduleAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner, uint256 startPrice, uint256 startBlock, uint256 durBlocks);
     event ReserveAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner, uint256 startPrice, uint256 durBlocks);
     event CancelAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner);
@@ -361,11 +373,6 @@ contract NftAuction is Ownable, IERC721Receiver{
 
     }
 
-    //TODO: test
-    function getAddr() view external returns(address){
-        return address(this);
-    }
-
     function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata data) external pure override returns (bytes4){
         return IERC721Receiver.onERC721Received.selector;
     }
@@ -376,6 +383,14 @@ contract NftAuction is Ownable, IERC721Receiver{
         ozerc721Addr = _ozerc721;
         ozerc721 = IOZERC721(_ozerc721);
         emit Erc721Changed(oldAddr, ozerc721Addr);
+    }
+
+    function setNtfTokenSold(address _ntfTokenSoldAddr) onlyOwner external {
+        require(ntfTokenSoldAddr != _ntfTokenSoldAddr, "NtfAuction: new NftTokenSold is same to old");
+        address oldAddr = ntfTokenSoldAddr;
+        ntfTokenSoldAddr = _ntfTokenSoldAddr;
+        nftTokenSold = NftTokenSold(_ntfTokenSoldAddr);
+        emit NtfTokenSoldChanged(oldAddr, _ntfTokenSoldAddr);
     }
 
     /**
@@ -606,7 +621,7 @@ contract NftAuction is Ownable, IERC721Receiver{
             }
             delete auctionType[_tokenId];
 
-            payout(payValue, currentBid, owner(), owner(), tokenOwner);
+            payout(payValue, currentBid, owner(), ozerc721.tokenCreator(_tokenId), tokenOwner, _tokenId);
             ozerc721.safeTransferFrom(address(this), winner, _tokenId);
 
             emit SettleAuction(ozerc721Addr, _tokenId, winner, tokenOwner, currentBid);
@@ -640,14 +655,27 @@ contract NftAuction is Ownable, IERC721Receiver{
      * pay money to participants.
      * TODO: should set token sold to true
      */
-    function payout(uint256 _payVal, uint256 _val, address _transAddr, address _aucAddr, address _tokenOwner) private {
+    function payout(uint256 _payVal, uint256 _val, address _maintainerAddr, address _creatorAddr, address _tokenOwner, uint256 _tokenId) private {
         uint256 maintainerTransPayment = _payVal - _val;
-        uint256 maintainerAucPayment = _val * maintainerAucPer / 1000;
-        uint256 ownerPayment = _val - maintainerAucPayment;
-        (payable(_transAddr)).transfer(maintainerTransPayment);
-        emit Payoff(_transAddr,  maintainerTransPayment);
-        (payable(_aucAddr)).transfer(maintainerAucPayment);
-        emit Payoff(_aucAddr,  maintainerAucPayment);
+        uint256 handlingFee;
+        uint256 ownerPayment;
+        address handFeeAddr;
+
+        //Sold before, creator hava 10%
+        if(nftTokenSold.getTokenSold(_tokenId)){
+            handlingFee = _val * secondHandFeePer / 1000;
+            handFeeAddr = _creatorAddr;
+        } else {
+            handlingFee = _val * firstHandFeePer / 1000;
+            handFeeAddr = _maintainerAddr;
+            nftTokenSold.setTokenSold(_tokenId);
+        }
+        ownerPayment = _val - handlingFee;
+
+        (payable(_maintainerAddr)).transfer(maintainerTransPayment);
+        emit Payoff(_maintainerAddr,  maintainerTransPayment);
+        (payable(handFeeAddr)).transfer(handlingFee);
+        emit Payoff(handFeeAddr, handlingFee);
         (payable(_tokenOwner)).transfer(ownerPayment);
         emit Payoff(_tokenOwner,  ownerPayment);
     }

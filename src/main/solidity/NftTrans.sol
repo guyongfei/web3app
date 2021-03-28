@@ -7,7 +7,6 @@ pragma solidity ^0.8.0;
 // This version of SafeMath should only be used with Solidity 0.8 or later,
 // because it relies on the compiler's built in overflow checks.
 
-
 /**
  * @dev Collection of functions related to the address type
  */
@@ -194,13 +193,14 @@ library Address {
     }
 }
 
+
 /**
  * @dev Wrappers over Solidity's arithmetic operations.
  *
  * NOTE: `SafeMath` is no longer needed starting with Solidity 0.8. The compiler
  * now has built in overflow checking.
  */
- library SafeMath {
+library SafeMath {
 
     /**
      * @dev Returns the addition of two unsigned integers, reverting on
@@ -275,6 +275,7 @@ library Address {
     }
 
 }
+
 
 interface IOZERC721 {
     /**
@@ -416,6 +417,7 @@ interface IOZERC721 {
     function tokenCreator(uint256 _tokenId) external view returns (address);
 }
 
+
 /*
  * @dev Provides information about the current execution context, including the
  * sender of the transaction and its data. While these are generally available
@@ -436,6 +438,7 @@ interface IOZERC721 {
         return msg.data;
     }
 }
+
 
 /**
  * @dev Contract module which provides a basic access control mechanism, where
@@ -501,6 +504,7 @@ abstract contract Ownable is Context {
     }
 }
 
+
 contract NftTrans is Ownable{
     using SafeMath for uint256;
     using Address for address;
@@ -553,13 +557,6 @@ contract NftTrans is Ownable{
     constructor(address _ozerc721) {
         ozerc721Addr = _ozerc721;
         ozerc721 = IOZERC721(_ozerc721);
-    }
-
-    /**
-     * TODO: test method to getNftName
-     */
-     function getNftName() external view returns (string memory){
-        return ozerc721.name();
     }
 
     function setNtfAddr(address _newNftAddr) onlyOwner external {
