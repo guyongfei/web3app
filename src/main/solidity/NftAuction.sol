@@ -306,9 +306,9 @@ contract NftAuction is Ownable, IERC721Receiver{
 
     event Offer(address indexed erc721, address indexed _offerer, uint256 _tokenId, uint256 _amount);
     event CancelOffer(address indexed erc721, address indexed _offerer, uint256 indexed _tokenId, uint256 _amount);
-    event AcceptOffer(address indexed erc721, address indexed _offerer, address indexed _seller, uint256 _amount, uint256 indexed _tokenId);
+    event AcceptOffer(address indexed erc721, address indexed _offerer, address indexed _seller, uint256 _amount, uint256 _tokenId);
     event SalePriceSet(address indexed erc721, uint256 indexed _tokenId, uint256 indexed _price);
-    event Buy(address indexed erc721, address indexed _buyer, address indexed _seller, uint256 _amount, uint256 indexed _tokenId);
+    event Buy(address indexed erc721, address indexed _buyer, address indexed _seller, uint256 _amount, uint256 _tokenId);
 
 
     // Following are for the Reserve Auction and Schedule Auction
@@ -379,7 +379,7 @@ contract NftAuction is Ownable, IERC721Receiver{
         address sender = _msgSender();
         require(_ozerc721.ownerOf(tokenId) == sender
         || _ozerc721.getApproved(tokenId) == sender
-        || _ozerc721.isApprovedForAll(_ozerc721.ownerOf(tokenId), sender),
+            || _ozerc721.isApprovedForAll(_ozerc721.ownerOf(tokenId), sender),
             "NftAuction: operator is not approved");
         _;
     }
@@ -573,22 +573,17 @@ contract NftAuction is Ownable, IERC721Receiver{
         uint256 sentPrice = msg.value;
         require(minPayValue > salePrice && sentPrice >= minPayValue, "NftAuction: payValue must be greater than _value");
 
-        address buyer = _msgSender();
-        address tokenOwner = ozerc721.ownerOf(_tokenId);
-        address creator = ozerc721.tokenCreator(_tokenId);
-        address currentOfferer = offers[_tokenId].offerer;
-        uint256 returnValue = offers[_tokenId].payValue;
-        if(currentOfferer != address(0) && returnValue > 0) {
+        if(offers[_tokenId].offerer != address(0) && offers[_tokenId].payValue > 0) {
+            payable(offers[_tokenId].offerer).transfer(offers[_tokenId].payValue);
+            emit Payoff(offers[_tokenId].offerer,  offers[_tokenId].payValue);
             delete offers[_tokenId];
-            payable(currentOfferer).transfer(returnValue);
-            emit Payoff(currentOfferer,  returnValue);
         }
         delete tokenSalePrice[_tokenId];
 
-        ozerc721.safeTransferFrom(tokenOwner, buyer, _tokenId);
-        payout(sentPrice, salePrice, owner(), creator, tokenOwner, _tokenId);
+        payout(sentPrice, salePrice, owner(), ozerc721.tokenCreator(_tokenId), ozerc721.ownerOf(_tokenId), _tokenId);
+        ozerc721.safeTransferFrom(ozerc721.ownerOf(_tokenId), _msgSender(), _tokenId);
 
-        Buy(ozerc721Addr, buyer, tokenOwner, salePrice, _tokenId);
+        Buy(ozerc721Addr, _msgSender(), ozerc721.ownerOf(_tokenId), salePrice, _tokenId);
     }
 
     /**
@@ -784,6 +779,8 @@ contract NftAuction is Ownable, IERC721Receiver{
      * 修改状态：
      * 5. 如果有bidding，delete buddingAuction
      * 6. delete origOwner, rAuctions|sAuctions, auctionType
+     * 7. 如果有offer， delete offer
+     * 8. 如果有salePrice，delete salePrice
      * 外部调用
      * 7. nft transfer to buyer|originOwner
      * 8. pay
@@ -818,6 +815,17 @@ contract NftAuction is Ownable, IERC721Receiver{
                 delete sAuctions[_tokenId];
             }
             delete auctionType[_tokenId];
+
+            address offerer = offers[_tokenId].offerer;
+            uint256 returnValue = offers[_tokenId].payValue;
+            if(offerer != address(0) && returnValue > 0) {
+                payable(offerer).transfer(returnValue);
+                emit Payoff(offerer,  returnValue);
+                delete offers[_tokenId];
+            }
+            if(tokenSalePrice[_tokenId] > 0){
+                delete tokenSalePrice[_tokenId];
+            }
 
             payout(payValue, currentBid, owner(), ozerc721.tokenCreator(_tokenId), tokenOwner, _tokenId);
             ozerc721.safeTransferFrom(address(this), winner, _tokenId);
