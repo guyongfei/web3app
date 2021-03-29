@@ -186,6 +186,7 @@ abstract contract Context {
     }
 }
 
+
 /**
  * @dev Contract module which provides a basic access control mechanism, where
  * there is an account (an owner) that can be granted exclusive access to
@@ -228,18 +229,6 @@ abstract contract Ownable is Context {
     }
 
     /**
-     * @dev Leaves the contract without owner. It will not be possible to call
-     * `onlyOwner` functions anymore. Can only be called by the current owner.
-     *
-     * NOTE: Renouncing ownership will leave the contract without an owner,
-     * thereby removing any functionality that is only available to the owner.
-     */
-    function renounceOwnership() public virtual onlyOwner {
-        emit OwnershipTransferred(_owner, address(0));
-        _owner = address(0);
-    }
-
-    /**
      * @dev Transfers ownership of the contract to a new account (`newOwner`).
      * Can only be called by the current owner.
      */
@@ -269,10 +258,12 @@ interface IERC721Receiver {
     function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata data) external returns (bytes4);
 }
 
+
 interface NftTokenSold {
     function setTokenSold(uint256 tokenId) external;
     function getTokenSold(uint256 tokenId) view external returns(bool);
 }
+
 
 contract NftAuction is Ownable, IERC721Receiver{
     IOZERC721 private ozerc721;
@@ -859,7 +850,6 @@ contract NftAuction is Ownable, IERC721Receiver{
 
     /**
      * pay money to participants.
-     * TODO: should set token sold to true
      */
     function payout(uint256 _payVal, uint256 _val, address _maintainerAddr, address _creatorAddr, address _tokenOwner, uint256 _tokenId) private {
         uint256 maintainerTransPayment = _payVal - _val;
