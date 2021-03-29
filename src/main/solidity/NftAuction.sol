@@ -281,15 +281,37 @@ contract NftAuction is Ownable, IERC721Receiver{
     NftTokenSold private nftTokenSold;
     address public ntfTokenSoldAddr;
 
+    event Erc721Changed(address indexed _from, address indexed _to);
+    event NtfTokenSoldChanged(address indexed _from, address indexed _to);
+    event Payoff(address indexed payAddr, uint256 payValue);
+
     // Percentage to owner of Platform for trans fee. 3%
     uint256 public maintainerTransPer = 30;
-
     // Percentage to owner of Platform for first trans fee. 15%
     uint256 public firstHandFeePer = 150;
-
     // Percentage to creator for n-hands trans fee. 10%
     uint256 public secondHandFeePer = 100;
 
+
+    // Following are for the offer and buy.
+    struct OfferItem{ // struct storing offer
+        address offerer;
+        uint256 offerValue;
+        uint256 payValue;
+    }
+    // Mapping from token ID to OfferItem
+    mapping(uint256 => OfferItem) private offers;
+    // Mapping from token ID to the owner sale price
+    mapping(uint256 => uint256) private tokenSalePrice;
+
+    event Offer(address indexed erc721, address indexed _offerer, uint256 _tokenId, uint256 _amount);
+    event CancelOffer(address indexed erc721, address indexed _offerer, uint256 indexed _tokenId, uint256 _amount);
+    event AcceptOffer(address indexed erc721, address indexed _offerer, address indexed _seller, uint256 _amount, uint256 indexed _tokenId);
+    event SalePriceSet(address indexed erc721, uint256 indexed _tokenId, uint256 indexed _price);
+    event Buy(address indexed erc721, address indexed _buyer, address indexed _seller, uint256 _amount, uint256 indexed _tokenId);
+
+
+    // Following are for the Reserve Auction and Schedule Auction
     enum AuctionType {None, Reserve, Schedule}
 
     struct RAuction{ //Planned Reserve Auction
@@ -313,33 +335,52 @@ contract NftAuction is Ownable, IERC721Receiver{
 
     //tokenId to AuctionType, this is used to check a token is in Auction or not.
     mapping(uint256=>AuctionType) public auctionType;
-
     //tokenId to Reserve Auction.
     mapping(uint256=>RAuction) public rAuctions;
-
     //tokenId to Schedule Auction.
     mapping(uint256=>SAuction) public sAuctions;
-
     //tokenId to BiddingAuction, only auctions with bids will be put here.
     mapping(uint256=>BiddingAuction) public biddingAuctions;
-
     //tokenId to Origin Owner. when an auction start or a schedule auction is planned, the token will be transferred to this contract address as mortgage.
     mapping(uint256=>address) public origOwner;
 
-    event Erc721Changed(address indexed _from, address indexed _to);
-    event NtfTokenSoldChanged(address indexed _from, address indexed _to);
     event ScheduleAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner, uint256 startPrice, uint256 startBlock, uint256 durBlocks);
     event ReserveAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner, uint256 startPrice, uint256 durBlocks);
     event CancelAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner);
     event Bid(address indexed erc721, uint256 indexed tokenId, address indexed newBidder, uint256 bidValue, address oldBidder, uint256 newDurBlocks, bool triggerAuction);
-    event Payoff(address indexed payAddr, uint256 payValue);
     event SettleAuction(address indexed erc721, uint256 indexed tokenId, address indexed buyer, address seller, uint256 price);
+
 
     /**
      * @dev Throws if address is not ERC721.
      */
     modifier _onlyErc721(address _erc721Addr) {
         require(IERC165(_erc721Addr).supportsInterface(0x80ac58cd), "NftAuction: address must be ERC721");
+        _;
+    }
+
+    /**
+     * @dev Guarantees msg.sender is not the owner of the given token
+     * @param _ozerc721 IOZERC721 indicating ERC721 contract
+     * @param _tokenId uint256 ID of the token to validate its ownership does not belongs to msg.sender
+     */
+    modifier _notOwnerOf(IOZERC721 _ozerc721, uint256 _tokenId) {
+        require(_ozerc721.ownerOf(_tokenId) != _msgSender(), "NftAuction: must not be token owner");
+        _;
+    }
+
+    modifier _payValueValid(uint256 _value) {
+        uint256 minPayValue = _value + (_value * maintainerTransPer / 1000);
+        require(minPayValue > _value && msg.value >= minPayValue, "NftAuction: payValue must be greater than _value");
+        _;
+    }
+
+    modifier _onlyTokenApprover1(IOZERC721 _ozerc721, uint256 tokenId) {
+        address sender = _msgSender();
+        require(_ozerc721.ownerOf(tokenId) == sender
+        || _ozerc721.getApproved(tokenId) == sender
+        || _ozerc721.isApprovedForAll(_ozerc721.ownerOf(tokenId), sender),
+            "NftAuction: operator is not approved");
         _;
     }
 
@@ -391,6 +432,163 @@ contract NftAuction is Ownable, IERC721Receiver{
         ntfTokenSoldAddr = _ntfTokenSoldAddr;
         nftTokenSold = NftTokenSold(_ntfTokenSoldAddr);
         emit NtfTokenSoldChanged(oldAddr, _ntfTokenSoldAddr);
+    }
+
+    /**
+     * @dev Offers on the token, replacing the offer if the offer is higher than the current offer.
+     * You cannot offer on a token you already own.
+     * Check:
+     * - Token Owner can't offer
+     * - msg.value must be greater than offer value * 1.03
+     * - new offer value must be greater than old offer value
+     * state change:
+     * - tokenOfferer[], tokenCurrentOffer[]
+     * call:
+     * - return old offer if available
+     * - emit event
+     * @param _tokenId uint256 ID of the token to offer on
+     * @param _value uint256 new offer value
+     */
+    function offer(uint256 _tokenId, uint256 _value) external payable _notOwnerOf(ozerc721, _tokenId) _payValueValid(_value) {
+        require(msg.value > offers[_tokenId].offerValue, "NtfAuction: new Offer must be greater than old");
+
+        if(offers[_tokenId].offerValue > 0 ){ // have old offer
+            uint256 oldPayValue = offers[_tokenId].payValue;
+            address oldOfferer = offers[_tokenId].offerer;
+            if(oldOfferer != address(0) && oldPayValue > 0) {
+                payable(oldOfferer).transfer(oldPayValue);
+                emit Payoff(oldOfferer,  oldPayValue);
+            }
+            offers[_tokenId].offerer = _msgSender();
+            offers[_tokenId].offerValue = _value;
+            offers[_tokenId].payValue = msg.value;
+        } else { // first offer
+            offers[_tokenId] = OfferItem({offerer: _msgSender(), offerValue: _value, payValue: msg.value});
+        }
+        emit Offer(ozerc721Addr, _msgSender(), _tokenId, _value);
+    }
+
+    /**
+     * @dev Cancels the offer on the token, returning the offer amount to the offerer.
+     * check:
+     * - only current offerer can be cancel
+     * state change:
+     * - delete offers[]
+     * call:
+     * - return value
+     * - emit event
+     * @param _tokenId uint256 ID of the token with an offer
+     */
+    function cancelOffer(uint256 _tokenId) external {
+        address offerer = offers[_tokenId].offerer;
+        require(_msgSender() == offerer, "NtfAuction: must be origin offerer");
+        uint256 returnValue = offers[_tokenId].payValue;
+        uint256 offerValue = offers[_tokenId].offerValue;
+        if(offerer != address(0) && returnValue > 0) {
+            payable(offerer).transfer(returnValue);
+            emit Payoff(offerer,  returnValue);
+        }
+        delete offers[_tokenId];
+
+        emit CancelOffer(ozerc721Addr, offerer, _tokenId, offerValue);
+    }
+
+
+    /**
+     * @dev Accept the offer on the token, transferring ownership to the current offerer and paying out the owner.
+     * check:
+     * - owner, operator, approver can accept
+     * - must have offer
+     * - not in auction
+     * state change:
+     * - delete offers[]
+     * - delete tokenSalePrice[]
+     * call:
+     * - transfer
+     * - payoff
+     * @param _tokenId uint256 ID of the token with the standing offer
+     */
+    function acceptOffer(uint256 _tokenId) external _onlyTokenApprover1(ozerc721, _tokenId) {
+        require(offers[_tokenId].offerValue > 0, "NftAuction: must have offer");
+        require(auctionType[_tokenId] == AuctionType.None, "NftAuction: must not in auction");
+
+        address offerer = offers[_tokenId].offerer;
+        uint256 offerValue = offers[_tokenId].offerValue;
+        uint256 payValue = offers[_tokenId].payValue;
+        address tokenOwner = ozerc721.ownerOf(_tokenId);
+        address creator = ozerc721.tokenCreator(_tokenId);
+
+        delete offers[_tokenId];
+        if(tokenSalePrice[_tokenId] > 0){
+            delete tokenSalePrice[_tokenId];
+        }
+
+        ozerc721.safeTransferFrom(tokenOwner, offerer, _tokenId);
+        payout(payValue, offerValue, owner(), creator, tokenOwner, _tokenId);
+        emit AcceptOffer(ozerc721Addr, offerer, tokenOwner, offerValue, _tokenId);
+    }
+
+    /**
+     * @dev Set the sale price of the token
+     * check:
+     * - tokenOwner, approver, operator can do
+     * - greater than current offer
+     * - not in auction
+     * state change:
+     * - tokenSalePrice[]
+     * call:
+     * - emit
+     * @param _tokenId uint256 ID of the token with the standing offer
+     */
+    function setSalePrice(uint256 _tokenId, uint256 _salePrice) external _onlyTokenApprover1(ozerc721, _tokenId) {
+        uint256 currentOffer = offers[_tokenId].offerValue;
+        require(_salePrice > currentOffer, "NftAuction: sale price must greater than current offer");
+        require(auctionType[_tokenId] == AuctionType.None, "NftAuction: must not in auction");
+        tokenSalePrice[_tokenId] = _salePrice;
+        SalePriceSet(ozerc721Addr,  _tokenId, _salePrice);
+    }
+
+    /**
+     * @dev Purchase the token if there is a sale price;
+     * transfers ownership to buyer and pays out owner.
+     * check:
+     * - not owner
+     * - not in auction
+     * - must have sale price
+     * - payValue must be greater than price * 1.03
+     * state changed:
+     * - delete tokenSalePrice
+     * - delete offers
+     * call:
+     * - transfer
+     * - payoff
+     * - return offer
+     * @param _tokenId uint256 ID of the token to be purchased
+     */
+    function buy(uint256 _tokenId) public payable _notOwnerOf(ozerc721, _tokenId) {
+        require(auctionType[_tokenId] == AuctionType.None, "NftAuction: must not in auction");
+        uint256 salePrice = tokenSalePrice[_tokenId];
+        require(salePrice > 0, "NftAuction: Token must have sale price");
+        uint256 minPayValue = salePrice + (salePrice * maintainerTransPer / 1000);
+        uint256 sentPrice = msg.value;
+        require(minPayValue > salePrice && sentPrice >= minPayValue, "NftAuction: payValue must be greater than _value");
+
+        address buyer = _msgSender();
+        address tokenOwner = ozerc721.ownerOf(_tokenId);
+        address creator = ozerc721.tokenCreator(_tokenId);
+        address currentOfferer = offers[_tokenId].offerer;
+        uint256 returnValue = offers[_tokenId].payValue;
+        if(currentOfferer != address(0) && returnValue > 0) {
+            delete offers[_tokenId];
+            payable(currentOfferer).transfer(returnValue);
+            emit Payoff(currentOfferer,  returnValue);
+        }
+        delete tokenSalePrice[_tokenId];
+
+        ozerc721.safeTransferFrom(tokenOwner, buyer, _tokenId);
+        payout(sentPrice, salePrice, owner(), creator, tokenOwner, _tokenId);
+
+        Buy(ozerc721Addr, buyer, tokenOwner, salePrice, _tokenId);
     }
 
     /**
