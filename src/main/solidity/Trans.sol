@@ -268,9 +268,9 @@ contract Trans is Ownable, IERC721Receiver{
         uint256 payValue;
     }
     // Mapping from token ID to OfferItem
-    mapping(uint256 => OfferItem) private offers;
+    mapping(uint256 => OfferItem) public offers;
     // Mapping from token ID to the owner sale price
-    mapping(uint256 => uint256) private tokenSalePrice;
+    mapping(uint256 => uint256) public tokenSalePrice;
 
     event Offer(address indexed erc721, address indexed _offerer, uint256 _tokenId, uint256 _amount);
     event CancelOffer(address indexed erc721, address indexed _offerer, uint256 indexed _tokenId, uint256 _amount);
@@ -302,15 +302,15 @@ contract Trans is Ownable, IERC721Receiver{
     }
 
     //tokenId to AuctionType, this is used to check a token is in Auction or not.
-    mapping(uint256=>AuctionType) private auctionType;
+    mapping(uint256=>AuctionType) public auctionType;
     //tokenId to Reserve Auction.
-    mapping(uint256=>RAuction) private rAuctions;
+    mapping(uint256=>RAuction) public rAuctions;
     //tokenId to Schedule Auction.
-    mapping(uint256=>SAuction) private sAuctions;
+    mapping(uint256=>SAuction) public sAuctions;
     //tokenId to BiddingAuction, only auctions with bids will be put here.
-    mapping(uint256=>BiddingAuction) private biddingAuctions;
+    mapping(uint256=>BiddingAuction) public biddingAuctions;
     //tokenId to Origin Owner. when an auction start or a schedule auction is planned, the token will be transferred to this contract address as mortgage.
-    mapping(uint256=>address) private origOwner;
+    mapping(uint256=>address) public origOwner;
 
     event ScheduleAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner, uint256 startPrice, uint256 startBlock, uint256 durBlocks);
     event ReserveAuction(address indexed erc721, uint256 indexed tokenId, address indexed tokenOwner, uint256 startPrice, uint256 durBlocks);
@@ -393,10 +393,8 @@ contract Trans is Ownable, IERC721Receiver{
      */
     function offer(uint256 _tokenId, uint256 _value) external payable _notOwnerOf(ozerc721, _tokenId) {
         uint256 minPayValue = _value + (_value * maintainerTransPer / 1000);
-        require(minPayValue > _value && msg.value >= minPayValue, "RVal");
-
-        require(msg.value > offers[_tokenId].offerValue, "RVal");
-
+        require(minPayValue > _value && msg.value >= minPayValue, "LOW");
+        require(_value > offers[_tokenId].offerValue, "LOW");
         if(offers[_tokenId].offerValue > 0 ){ // have old offer
             uint256 oldPayValue = offers[_tokenId].payValue;
             address oldOfferer = offers[_tokenId].offerer;
@@ -454,14 +452,15 @@ contract Trans is Ownable, IERC721Receiver{
         require(offers[_tokenId].offerValue > 0, "NOO");
         require(auctionType[_tokenId] == AuctionType.None, "AUC");
 
+        ozerc721.safeTransferFrom(ozerc721.ownerOf(_tokenId), offers[_tokenId].offerer, _tokenId);
+        payout(offers[_tokenId].payValue, offers[_tokenId].offerValue, owner(), ozerc721.tokenCreator(_tokenId), ozerc721.ownerOf(_tokenId), _tokenId);
+        emit AcceptOffer(address(ozerc721), offers[_tokenId].offerer, ozerc721.ownerOf(_tokenId), offers[_tokenId].offerValue, _tokenId);
+
         delete offers[_tokenId];
         if(tokenSalePrice[_tokenId] > 0){
             delete tokenSalePrice[_tokenId];
         }
 
-        ozerc721.safeTransferFrom(ozerc721.ownerOf(_tokenId), offers[_tokenId].offerer, _tokenId);
-        payout(offers[_tokenId].payValue, offers[_tokenId].offerValue, owner(), ozerc721.tokenCreator(_tokenId), ozerc721.ownerOf(_tokenId), _tokenId);
-        emit AcceptOffer(address(ozerc721), offers[_tokenId].offerer, ozerc721.ownerOf(_tokenId), offers[_tokenId].offerValue, _tokenId);
     }
 
     /**
@@ -480,7 +479,7 @@ contract Trans is Ownable, IERC721Receiver{
         require(_salePrice > offers[_tokenId].offerValue, "LOW");
         require(auctionType[_tokenId] == AuctionType.None, "AUC");
         tokenSalePrice[_tokenId] = _salePrice;
-        SalePriceSet(address(ozerc721),  _tokenId, _salePrice);
+        emit SalePriceSet(address(ozerc721),  _tokenId, _salePrice);
     }
 
     /**
@@ -517,7 +516,7 @@ contract Trans is Ownable, IERC721Receiver{
         payout(msg.value, salePrice, owner(), ozerc721.tokenCreator(_tokenId), ozerc721.ownerOf(_tokenId), _tokenId);
         ozerc721.safeTransferFrom(ozerc721.ownerOf(_tokenId), _msgSender(), _tokenId);
 
-        Buy(address(ozerc721), _msgSender(), ozerc721.ownerOf(_tokenId), salePrice, _tokenId);
+        emit Buy(address(ozerc721), _msgSender(), ozerc721.ownerOf(_tokenId), salePrice, _tokenId);
     }
 
     /**
@@ -548,7 +547,7 @@ contract Trans is Ownable, IERC721Receiver{
         auctionType[_tokenId] = AuctionType.Schedule;
         sAuctions[_tokenId] = SAuction({startPrice:_startPrice, startBlock:_startBlock, durBlocks:_durBlocks});
         ozerc721.safeTransferFrom(ozerc721.ownerOf(_tokenId), address(this), _tokenId);
-        ScheduleAuction(address(ozerc721), _tokenId, ozerc721.ownerOf(_tokenId), _startPrice, _startBlock, _durBlocks);
+        emit ScheduleAuction(address(ozerc721), _tokenId, ozerc721.ownerOf(_tokenId), _startPrice, _startBlock, _durBlocks);
     }
 
     /**
