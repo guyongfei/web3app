@@ -245,7 +245,7 @@ interface NftTokenSold {
 }
 
 
-contract NftAuction is Ownable, IERC721Receiver{
+contract Trans is Ownable, IERC721Receiver{
     IOZERC721 private ozerc721;
     NftTokenSold private nftTokenSold;
 
@@ -425,17 +425,14 @@ contract NftAuction is Ownable, IERC721Receiver{
      * @param _tokenId uint256 ID of the token with an offer
      */
     function cancelOffer(uint256 _tokenId) external {
-        address offerer = offers[_tokenId].offerer;
-        require(_msgSender() == offerer, "WOf");
-        uint256 returnValue = offers[_tokenId].payValue;
-        uint256 offerValue = offers[_tokenId].offerValue;
-        if(offerer != address(0) && returnValue > 0) {
-            payable(offerer).transfer(returnValue);
-            emit Payoff(offerer,  returnValue);
+        require(_msgSender() == offers[_tokenId].offerer, "WOf");
+        if(offers[_tokenId].offerer != address(0) && offers[_tokenId].payValue > 0) {
+            payable(offers[_tokenId].offerer).transfer(offers[_tokenId].payValue);
+            emit Payoff(offers[_tokenId].offerer, offers[_tokenId].payValue);
         }
-        delete offers[_tokenId];
+        emit CancelOffer(address(ozerc721), offers[_tokenId].offerer, _tokenId, offers[_tokenId].offerValue);
 
-        emit CancelOffer(address(ozerc721), offerer, _tokenId, offerValue);
+        delete offers[_tokenId];
     }
 
 

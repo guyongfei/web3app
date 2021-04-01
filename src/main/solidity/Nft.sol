@@ -1151,12 +1151,14 @@ interface IERC721Creator is IERC721 {
     function tokenCreator(uint256 _tokenId) external view returns (address);
 }
 
-contract OZERC721 is ERC721Enumerable, IERC721Creator, Whitelist {
+contract Ntf is ERC721Enumerable, IERC721Creator, Whitelist {
     // Mapping from token ID to the creator's address.
     mapping(uint256 => address) private _tokenCreators;
 
     // Event indicating metadata was updated.
     event TokenURIUpdated(uint256 indexed _tokenId, string  _uri);
+
+    uint256 private nftId = 1000;
 
     constructor(string memory _name, string memory _symbol) ERC721Enumerable(_name, _symbol) {
     }
@@ -1250,7 +1252,7 @@ contract OZERC721 is ERC721Enumerable, IERC721Creator, Whitelist {
      * in child contracts.
      */
     function _baseURI() internal pure override returns (string memory) {
-        return "https://www.somebody.com/"; //TODO
+        return "https://www.thetoken.com/"; //TODO
     }
 
     /**
@@ -1258,7 +1260,8 @@ contract OZERC721 is ERC721Enumerable, IERC721Creator, Whitelist {
      * @param _creator address of the creator of the token.
      */
     function _createToken(address _creator) internal returns (uint256) {
-        uint256 newId = totalSupply() + 1; //TODO: bug, should use fixCounter
+        uint256 newId = nftId;
+        nftId++;
         _safeMint(_creator, newId);
         _setTokenCreator(newId, _creator);
         return newId;
